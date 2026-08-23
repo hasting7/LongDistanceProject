@@ -6,6 +6,7 @@
 #include "wifi_interface.h"
 #include "gpio_interface.h"
 #include "api_interface.h"
+#include "eink_driver.h"
 
 #define WIFI_STATUS_PIN (2)
 
@@ -34,6 +35,7 @@ void app_main(void)
 {
 	disk_init();
 	wifi_init();
+	// eink_init();
 	
 	xTaskCreatePinnedToCore(wifi_join_state, "wifi_led", 4096, NULL, 5, NULL, 1);
 
@@ -48,8 +50,6 @@ void app_main(void)
 	}
 
 	api_get();
-
-
 
 	// clear_segment(USER_TYPE)
 
