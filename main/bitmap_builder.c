@@ -1,30 +1,64 @@
-
-#include <stdio.h> // REMOVE
 #include <string.h>
 
+#include "esp_log.h"
+#include "esp_system.h"
+#include "bitmap_builder.h"
 
 #define EINK_WIDTH			(128)
 #define EINK_HEIGHT 		(296)
 #define EINK_WIDTH_BYTES 	(EINK_WIDTH / 8) 
-#define EINK_BUFFER_SIZE 	(EINK_WIDTH_BYTES * EINK_HEIGHT)
 
+const int EINK_BUFFER_SIZE = (EINK_WIDTH_BYTES * EINK_HEIGHT);
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static uint8_t bitmap_buffer[EINK_BUFFER_SIZE];
+static const char *TAG = "BitMap Builder";
 static int width_padding_bytes = 0;
-static int used_buff = 0;
-static int used_bitmap_row_bytes = 0;
-static int total_bitmap_size = 0;
-static int image_width = 0;
-static int image_height = 0;
-static int should_skip = 0;
 
 
-/*
-FIX this file
-just start the buffer in the heap, not just on the return
-it is overflowing the stack so just init on the stack inistally 
+/* 
+	ENSURE ONLY ONE SCREENDATA STRUCT IS BEING CREATED AT AA TIME
 */
+typedef struct screen_data_t{
+	uint8_t *bitmap_buffer;
+	ScreenStatus status;
+	int consumed_buffer;
+	int row_consumed;
+	int total_bitmap_size;
+	int image_width;
+	int image_height;
+	int skipping;
+
+} ScreenData;
+
+ScreenData *create_screen_data_instance() {
+	ScreenData *ptr = malloc(sizeof(ScreenData));
+	uint8_t *bitmap_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
+
+	ptr->bitmap_buffer = bitmap_buffer;
+	ptr->consumed_buffer = 0;
+	ptr->row_consumed = 0;
+	ptr->total_bitmap_size = 0;
+	ptr->image_width = 0;
+	ptr->image_height = 0;
+	ptr->skipping = 0;
+	ptr->status = NOT_STARTED;
+	return ptr;
+
+}
+
+ScreenData *create_screen_data_instance_from_mem(uint8_t *bitmap_buffer, size_t size) {
+	ScreenData *ptr = malloc(sizeof(ScreenData));
+	ptr->bitmap_buffer = bitmap_buffer;
+	ptr->status = COMPLETE;
+	return ptr;
+}
+
+void delete_screen_data_instance(ScreenData *ptr) {
+	free(ptr->bitmap_buffer);
+	free(ptr);
+	ptr = NULL;
+}
+
 
 static uint32_t read_u32_le(const char *buf) {
     return  (uint32_t)buf[0]
@@ -33,100 +67,111 @@ static uint32_t read_u32_le(const char *buf) {
           | (uint32_t)buf[3] << 24;
 }
 
-static int reset_bitmap_buffer(const char *buffer) {
+/*
+	REJECT REQUESTS THAT DONT HAVE THE SAME INAGES SIZE OF EXPECTED
+*/
+static int reset_bitmap_buffer(ScreenData *screen, const char *packet_buffer) {
 	int header_offset_size = 0;
 
-	used_buff = 0;
-	total_bitmap_size = 0;
-	image_width = 0;
-	image_height = 0;
-	used_bitmap_row_bytes = 0;
-	should_skip = 0;
+	screen->consumed_buffer = 0;
+	screen->row_consumed = 0;
+	screen->total_bitmap_size = 0;
+	screen->image_width = 0;
+	screen->image_height = 0;
+	screen->skipping = 0;
+	screen->status = IN_PROGRESS;
 
+	// MOVE THIS
 	while ((width_padding_bytes + EINK_WIDTH_BYTES) % 4 != 0) {
 		width_padding_bytes += 1;
 	}
-	printf("Padding bytes: %d\n",width_padding_bytes);
+	ESP_LOGI(TAG, "Padding bytes: %d", width_padding_bytes);
 
 	// read though header
 
 	// bfType
-	buffer += 2;
+	packet_buffer += 2;
 
 	// bfSize
-	total_bitmap_size = read_u32_le(buffer);
-	printf("Total bitmap payload size: %d\n", total_bitmap_size);
-	buffer += 4;
+	screen->total_bitmap_size = read_u32_le(packet_buffer);
+	packet_buffer += 4;
 
 	// unused
-	buffer += 4;
+	packet_buffer += 4;
 
 	// get header offset 
-	header_offset_size = read_u32_le(buffer);
-	buffer += 4;
+	header_offset_size = read_u32_le(packet_buffer);
+	packet_buffer += 4;
 
 	// unused
-	buffer += 4;
+	packet_buffer += 4;
 
 	// get image width 
-	image_width = read_u32_le(buffer);
-	buffer += 4;
+	screen->image_width = read_u32_le(packet_buffer);
+	packet_buffer += 4;
 
 	// get image height
-	image_height = read_u32_le(buffer);
-	buffer += 4;
+	screen->image_height = read_u32_le(packet_buffer);
+	packet_buffer += 4;
 
-	printf("total bitmap size: %d\nimage width: %d\nimage height: %d\n", total_bitmap_size, image_width, image_height);
+	ESP_LOGI(TAG, "total bitmap size: %d, image width: %d, image height: %d",
+	         screen->total_bitmap_size, screen->image_width, screen->image_height);
 
 	return header_offset_size;
 }
 
-uint8_t* serve_bitmap() {
-	if (used_buff != EINK_BUFFER_SIZE) {
-		printf("NOT COMPLETE\n");
+/*
+	TODO suspend until complete
+*/
+uint8_t* serve_bitmap(ScreenData *screen) {
+	if (screen->status != COMPLETE) {
+		ESP_LOGW(TAG, "NOT COMPLETE");
 		return NULL;
 	}
-	uint8_t *ptr = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
-	memcpy(ptr, bitmap_buffer, EINK_BUFFER_SIZE);
-	return ptr;
+	return screen->bitmap_buffer;
 }
 
-void consume_http_packet(const char *buffer, size_t buffer_size) {
+void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t buffer_size) {
 	int consumed_buffer = 0;
 	int bytes_to_read;
 
-	if (buffer[0] == 'B' && buffer[1] == 'M') {
+	if (packet_buffer[0] == 'B' && packet_buffer[1] == 'M') {
+		if (screen->status != NOT_STARTED) {
+			// why are we getting another packet start if we are in progress
+			ESP_LOGE(TAG, "Screen already buildng but intro packet received.");
+			esp_restart(); // MAYBE??
+		}
 		// new image
-		consumed_buffer = reset_bitmap_buffer(buffer);
+		consumed_buffer = reset_bitmap_buffer(screen, packet_buffer);
 	}
 	// read into buffer
-	printf("Buffer size in : %d\n", buffer_size);
-	printf("Copying %d bytes to bufer.\n", buffer_size - consumed_buffer);
-	// read until used_buff == EINK_WIDTH_BYTES, then discard width_padding_bytes
+	ESP_LOGI(TAG, "Buffer size in: %d, copying %d bytes to buffer.", buffer_size, buffer_size - consumed_buffer);
 
 	while (consumed_buffer < buffer_size) {
-		if (should_skip > 0) {
+		if (screen->skipping > 0) {
 			consumed_buffer++;
-			should_skip--;
+			screen->skipping--;
 			continue;
 		}
 		// get bytes to read
-		bytes_to_read = MIN(EINK_WIDTH_BYTES - used_bitmap_row_bytes, buffer_size - consumed_buffer);
-		printf("reading %d bytes into buffer.\n", bytes_to_read);
+		bytes_to_read = MIN(EINK_WIDTH_BYTES - screen->row_consumed, buffer_size - consumed_buffer);
 
 		// read the bytes
-		memcpy(bitmap_buffer + used_buff, buffer + consumed_buffer, bytes_to_read);
+		memcpy(screen->bitmap_buffer + screen->consumed_buffer, packet_buffer + consumed_buffer, bytes_to_read);
 		consumed_buffer += bytes_to_read;
-		used_bitmap_row_bytes += bytes_to_read;
-		used_buff += bytes_to_read;
+		screen->row_consumed += bytes_to_read;
+		screen->consumed_buffer += bytes_to_read;
 
-		if (EINK_WIDTH_BYTES == used_bitmap_row_bytes) {
-			used_bitmap_row_bytes = 0;
-			should_skip += width_padding_bytes;
+		if (EINK_WIDTH_BYTES == screen->row_consumed) {
+			screen->row_consumed = 0;
+			screen->skipping += width_padding_bytes;
 		}
 
 	}
+	if (screen->consumed_buffer == EINK_BUFFER_SIZE) {
+		screen->status = COMPLETE;
+	}
 
-	printf("%d / %d filled\n", used_buff, EINK_BUFFER_SIZE);
+	ESP_LOGI(TAG, "%d / %d filled", screen->consumed_buffer, EINK_BUFFER_SIZE);
 
 }

@@ -29,7 +29,7 @@ static const char *TAG = "wifi station";
 static int s_retry_num = 0;
 
 
-volatile wifi_state_enum wifi_state = WIFI_NO_STATUS;
+volatile wifi_state_enum wifi_state = WIFI_PENDING;
 
 
 static void event_handler(void* arg, esp_event_base_t event_base,

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
 
 #include "disk_interface.h"
 #include "wifi_interface.h"
@@ -9,6 +10,8 @@
 #include "eink_driver.h"
 
 #define WIFI_STATUS_PIN (2)
+
+static const char *TAG = "Main";
 
 
 void wifi_join_state(void *pvParameters)
@@ -31,13 +34,53 @@ void wifi_join_state(void *pvParameters)
     vTaskDelete(NULL);
 }
 
+void store_screen_to_nvm(const char *endpoint, const char *name) {
+	ScreenData *screen = create_screen_data_instance();
+	api_get(screen, endpoint);
+	vTaskDelay(pdMS_TO_TICKS(1000)); // FIXXXXXXX make it not time based
+ 
+	uint8_t *screen_data = serve_bitmap(screen);
+	if (!screen_data) {
+		ESP_LOGE(TAG, "Screen not ready, not storing \"%s\" to NVM", name);
+	} else {
+		store_struct(SCREEN_TYPE, name, (void *) screen_data, EINK_BUFFER_SIZE);
+	}
+ 
+	delete_screen_data_instance(screen);
+}
+ 
+void boot_screen(void) {
+	uint8_t *screen_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
+	if (!screen_buffer) {
+		ESP_LOGE(TAG, "Failed to allocate screen buffer");
+		return;
+	}
+ 
+	size_t size = EINK_BUFFER_SIZE; // must be set to capacity before get_struct call
+	if (get_struct(SCREEN_TYPE, "boot", screen_buffer, &size)) {
+		ScreenData *screen = create_screen_data_instance_from_mem(screen_buffer, size);
+		display_screen(screen);
+		delete_screen_data_instance(screen);
+	} else {
+		ESP_LOGW(TAG, "NO BOOT SCREEN");
+		free(screen_buffer);
+	}	
+}
+
+
+/*
+if cannot connect to wifi, flash the qr code page and say "if you think this is wrong reboot"
+*/
+
 void app_main(void)
 {
+	xTaskCreate(wifi_join_state, "wifi_led", 4096, NULL, 5, NULL);
 	disk_init();
+	eink_init();
+	boot_screen();
 	wifi_init();
-	// eink_init();
-	
-	xTaskCreatePinnedToCore(wifi_join_state, "wifi_led", 4096, NULL, 5, NULL, 1);
+	vTaskDelay(pdMS_TO_TICKS(5000));
+
 
 	WifiDetails stored_wifi;
 	size_t size;
@@ -49,45 +92,13 @@ void app_main(void)
 		wifi_state = WIFI_FAILED;
 	}
 
-	api_get();
+	ScreenData *screen = create_screen_data_instance();
+	api_get(screen, "http://10.0.0.79/image");
 
-	// clear_segment(USER_TYPE)
+	vTaskDelay(pdMS_TO_TICKS(1000)); // FIXXXXXXX make it not time based
 
-	// WifiDetails default_wifi = { .ssid = "Hastings Wifi", .pwd = "M1212hS0701h_"};
-	// store_struct(CONFIG_TYPE, "wifi", (void *) &default_wifi, sizeof(default_wifi));
+	display_screen(screen);
+	delete_screen_data_instance(screen);
 
-	// WifiDetails stored_info;
-	// size_t size;
-	// get_struct(CONFIG_TYPE, "wifi", &stored_info, &size);
-
-	// if (!size) {
-	// 	printf("No wifi found...\n");
-	// 	return;
-	// } else {
-	// 	printf("Wifi found\n\tssid: %s\n\tpwd: %s\n", stored_info.ssid, stored_info.pwd);
-	// 	if (!wifi_join(stored_info.ssid, stored_info.pwd)) {
-	// 		printf("Could not connect to wifi...\n");
-	// 		return;
-	// 	}
-	// }
-
-	// printf("Successfully running....\n");
-
-
-
-	// if (!wifi_join("Hastings Wifi", "M1212hS0701h_")) {
-	// 	printf("Could not join WiFi -- falling back\n");
-	// }
-
-	// store_struct(USER_TYPE, "name", (void *) "Ben", 3);
-
-	// char buff[4];
-	// size_t bytes = get_struct(USER_TYPE,"name2", buff, 4);
-	// buff[3] ='\0';
-	// if (!bytes) {
-	// 	printf("Nothing found\n");
-	// } else {
-	// 	printf("NAME FROM DISK: %s (%d)\n", buff, bytes);		
-	// }
 
 }

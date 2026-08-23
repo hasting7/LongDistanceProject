@@ -1,9 +1,9 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
-#include "esp_log.h"
 
 #include "eink_driver.h"
 
@@ -20,6 +20,8 @@
 #define EPD_WIDTH_BYTES (EPD_WIDTH_PX / 8)          // 16
 #define EPD_BUF_SIZE   (EPD_WIDTH_BYTES * EPD_HEIGHT_PX)  // 4736 bytes
 
+#define EPD_BUSY_TIMEOUT_MS 5000
+
 static const char *TAG = "Eink";
 static spi_device_handle_t spi;
 
@@ -29,7 +31,10 @@ static void epd_send_cmd(uint8_t cmd) {
         .length = 8,
         .tx_buffer = &cmd,
     };
-    spi_device_transmit(spi, &t);
+    esp_err_t ret = spi_device_transmit(spi, &t);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "SPI cmd 0x%02X failed: %s", cmd, esp_err_to_name(ret));
+    }
 }
 
 static void epd_send_data_byte(uint8_t data) {
@@ -38,7 +43,10 @@ static void epd_send_data_byte(uint8_t data) {
         .length = 8,
         .tx_buffer = &data,
     };
-    spi_device_transmit(spi, &t);
+    esp_err_t ret = spi_device_transmit(spi, &t);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "SPI data 0x%02X failed: %s", data, esp_err_to_name(ret));
+    }
 }
 
 static void epd_send_data_buf(const uint8_t *data, size_t len) {
@@ -52,31 +60,48 @@ static void epd_send_data_buf(const uint8_t *data, size_t len) {
             .length = chunk * 8,
             .tx_buffer = data + offset,
         };
-        spi_device_transmit(spi, &t);
+        esp_err_t ret = spi_device_transmit(spi, &t);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "SPI data_buf chunk at offset %u failed: %s", (unsigned)offset, esp_err_to_name(ret));
+        }
         offset += chunk;
     }
 }
 
-static void epd_wait_busy(void) {
+static bool epd_wait_busy(void) {
+    int level = gpio_get_level(PIN_BUSY);
+    ESP_LOGI(TAG, "epd_wait_busy: entering, BUSY currently %d", level);
+    TickType_t start = xTaskGetTickCount();
     while (gpio_get_level(PIN_BUSY)) {
+        if ((xTaskGetTickCount() - start) > pdMS_TO_TICKS(EPD_BUSY_TIMEOUT_MS)) {
+            ESP_LOGE(TAG, "epd_wait_busy: TIMED OUT after %d ms, BUSY still %d",
+                     EPD_BUSY_TIMEOUT_MS, gpio_get_level(PIN_BUSY));
+            return false;
+        }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+    ESP_LOGI(TAG, "epd_wait_busy: cleared after %d ms",
+             (int)((xTaskGetTickCount() - start) * portTICK_PERIOD_MS));
+    return true;
 }
 
 static void epd_reset(void) {
     gpio_set_level(PIN_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(20));
     gpio_set_level(PIN_RST, 0);
-    vTaskDelay(pdMS_TO_TICKS(5));
+    vTaskDelay(pdMS_TO_TICKS(10)); 
     gpio_set_level(PIN_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(20));
+    ESP_LOGI(TAG, "epd_reset: RST pulsed, BUSY now %d", gpio_get_level(PIN_BUSY));
 }
 
 static void epd_deep_sleep(void) {
     epd_send_cmd(0x10);
     epd_send_data_byte(0x01);
+    vTaskDelay(pdMS_TO_TICKS(100));
 }
 
+// call once at boot: GPIO + SPI bus setup only
 void eink_init(void) {
     // GPIO SETUP
     gpio_config_t out_conf = {
@@ -88,8 +113,13 @@ void eink_init(void) {
     gpio_config_t in_conf = {
         .pin_bit_mask = (1ULL << PIN_BUSY),
         .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
     gpio_config(&in_conf);
+
+    ESP_LOGI(TAG, "eink_init: BUSY pin reads %d before any SPI/reset activity",
+             gpio_get_level(PIN_BUSY));
 
     // SPI SETUP
     spi_bus_config_t buscfg = {
@@ -109,13 +139,17 @@ void eink_init(void) {
         .queue_size = 4,
     };
     ESP_ERROR_CHECK(spi_bus_add_device(SPI2_HOST, &devcfg, &spi));
+}
 
-    // SPI SETUP
 
+static bool epd_wake_and_configure(void) {
     epd_reset();
 
     epd_send_cmd(0x12); // SW reset
-    epd_wait_busy();
+    if (!epd_wait_busy()) {
+        ESP_LOGE(TAG, "Timed out waiting busy after SW reset (0x12) — panel not responding");
+        return false;
+    }
 
     epd_send_cmd(0x01); // driver output control: 296 MUX
     epd_send_data_byte(0x27);
@@ -151,17 +185,36 @@ void eink_init(void) {
     epd_send_data_byte(0x00);
     epd_send_data_byte(0x00);
 
-    epd_wait_busy();
+    return true;
 }
 
-void draw_bmp(const uint8_t *framebuf, size_t size) {
+bool display_screen(ScreenData *ptr) {
+    ESP_LOGI(TAG, "display_screen called");
+    uint8_t *framebuf = serve_bitmap(ptr);
+    if (!framebuf) {
+        ESP_LOGE(TAG, "Screen not complete, cannot display.");
+        return false;
+    }
+    ESP_LOGI(TAG, "Got framebuf, waking display");
+
+    if (!epd_wake_and_configure()) {
+        return false;
+    }
+    ESP_LOGI(TAG, "Display configured, writing RAM");
+
     epd_send_cmd(0x24);
     epd_send_data_buf(framebuf, EPD_BUF_SIZE);
+    ESP_LOGI(TAG, "RAM written, triggering update");
 
     epd_send_cmd(0x22);
     epd_send_data_byte(0xF7);
     epd_send_cmd(0x20);
-    epd_wait_busy();
+    if (!epd_wait_busy()) {
+        ESP_LOGE(TAG, "Timed out waiting busy after Master Activation (0x20)");
+        return false;
+    }
+    ESP_LOGI(TAG, "Update complete, sleeping");
 
     epd_deep_sleep();
+    return true;
 }

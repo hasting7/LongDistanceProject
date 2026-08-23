@@ -12,7 +12,6 @@ typedef struct {
 } WifiDetails;
 
 typedef enum {
-	WIFI_NO_STATUS,
     WIFI_PENDING,
     WIFI_CONNECTED,
     WIFI_FAILED,
