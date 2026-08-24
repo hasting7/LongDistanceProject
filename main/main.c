@@ -37,9 +37,7 @@ void wifi_join_state(void *pvParameters)
 void store_screen_to_nvm(const char *endpoint, const char *name) {
 	ScreenData *screen = create_screen_data_instance();
 	api_get(screen, endpoint);
-	vTaskDelay(pdMS_TO_TICKS(1000)); // FIXXXXXXX make it not time based
- 
-	uint8_t *screen_data = serve_bitmap(screen);
+	uint8_t *screen_data = serve_bitmap(screen, 5000);
 	if (!screen_data) {
 		ESP_LOGE(TAG, "Screen not ready, not storing \"%s\" to NVM", name);
 	} else {
@@ -59,12 +57,24 @@ void boot_screen(void) {
 	size_t size = EINK_BUFFER_SIZE; // must be set to capacity before get_struct call
 	if (get_struct(SCREEN_TYPE, "boot", screen_buffer, &size)) {
 		ScreenData *screen = create_screen_data_instance_from_mem(screen_buffer, size);
-		display_screen(screen);
+		uint8_t *bitmap = serve_bitmap(screen, 5000);
+		display_screen(bitmap);
 		delete_screen_data_instance(screen);
 	} else {
 		ESP_LOGW(TAG, "NO BOOT SCREEN");
 		free(screen_buffer);
 	}	
+}
+
+bool display(const char *endpoint) {
+    ScreenData *screen = create_screen_data_instance();
+    api_get(screen, endpoint);
+
+    uint8_t *bitmap = serve_bitmap(screen, 5000);
+    bool ok = bitmap ? display_screen(bitmap) : false;
+
+    delete_screen_data_instance(screen);
+    return ok;
 }
 
 
@@ -92,13 +102,5 @@ void app_main(void)
 		wifi_state = WIFI_FAILED;
 	}
 
-	ScreenData *screen = create_screen_data_instance();
-	api_get(screen, "http://10.0.0.79/image");
-
-	vTaskDelay(pdMS_TO_TICKS(1000)); // FIXXXXXXX make it not time based
-
-	display_screen(screen);
-	delete_screen_data_instance(screen);
-
-
+	display("http://10.0.0.79/image");
 }

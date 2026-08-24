@@ -4,6 +4,6 @@
 #include "bitmap_builder.h"
 
 void eink_init(void);
-bool display_screen(ScreenData *ptr);
+bool display_screen(uint8_t *ptr);
 
 #endif

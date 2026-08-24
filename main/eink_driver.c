@@ -188,10 +188,10 @@ static bool epd_wake_and_configure(void) {
     return true;
 }
 
-bool display_screen(ScreenData *ptr) {
+
+bool display_screen(uint8_t *frame_ptr) {
     ESP_LOGI(TAG, "display_screen called");
-    uint8_t *framebuf = serve_bitmap(ptr);
-    if (!framebuf) {
+    if (!frame_ptr) {
         ESP_LOGE(TAG, "Screen not complete, cannot display.");
         return false;
     }
@@ -203,7 +203,7 @@ bool display_screen(ScreenData *ptr) {
     ESP_LOGI(TAG, "Display configured, writing RAM");
 
     epd_send_cmd(0x24);
-    epd_send_data_buf(framebuf, EPD_BUF_SIZE);
+    epd_send_data_buf(frame_ptr, EPD_BUF_SIZE);
     ESP_LOGI(TAG, "RAM written, triggering update");
 
     epd_send_cmd(0x22);

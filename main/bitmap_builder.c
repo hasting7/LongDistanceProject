@@ -27,7 +27,7 @@ typedef struct screen_data_t{
 	int image_width;
 	int image_height;
 	int skipping;
-
+	SemaphoreHandle_t ready_sem;
 } ScreenData;
 
 ScreenData *create_screen_data_instance() {
@@ -42,6 +42,7 @@ ScreenData *create_screen_data_instance() {
 	ptr->image_height = 0;
 	ptr->skipping = 0;
 	ptr->status = NOT_STARTED;
+	ptr->ready_sem = xSemaphoreCreateBinary();
 	return ptr;
 
 }
@@ -50,10 +51,13 @@ ScreenData *create_screen_data_instance_from_mem(uint8_t *bitmap_buffer, size_t 
 	ScreenData *ptr = malloc(sizeof(ScreenData));
 	ptr->bitmap_buffer = bitmap_buffer;
 	ptr->status = COMPLETE;
+	ptr->ready_sem = xSemaphoreCreateBinary();
+	xSemaphoreGive(ptr->ready_sem);
 	return ptr;
 }
 
 void delete_screen_data_instance(ScreenData *ptr) {
+	vSemaphoreDelete(ptr->ready_sem);
 	free(ptr->bitmap_buffer);
 	free(ptr);
 	ptr = NULL;
@@ -120,15 +124,16 @@ static int reset_bitmap_buffer(ScreenData *screen, const char *packet_buffer) {
 	return header_offset_size;
 }
 
-/*
-	TODO suspend until complete
-*/
-uint8_t* serve_bitmap(ScreenData *screen) {
-	if (screen->status != COMPLETE) {
-		ESP_LOGW(TAG, "NOT COMPLETE");
-		return NULL;
-	}
-	return screen->bitmap_buffer;
+uint8_t* serve_bitmap(ScreenData *screen, uint32_t timeout_ms) {
+    if (xSemaphoreTake(screen->ready_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE) {
+        ESP_LOGE(TAG, "Timed out waiting for bitmap to complete");
+        return NULL;
+    }
+    if (screen->status != COMPLETE) {
+        ESP_LOGW(TAG, "NOT COMPLETE");
+        return NULL;
+    }
+    return screen->bitmap_buffer;
 }
 
 void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t buffer_size) {
@@ -170,6 +175,7 @@ void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t b
 	}
 	if (screen->consumed_buffer == EINK_BUFFER_SIZE) {
 		screen->status = COMPLETE;
+		xSemaphoreGive(screen->ready_sem);
 	}
 
 	ESP_LOGI(TAG, "%d / %d filled", screen->consumed_buffer, EINK_BUFFER_SIZE);
