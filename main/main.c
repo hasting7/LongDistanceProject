@@ -209,6 +209,7 @@ void app_main(void)
         size_t size = sizeof(wifi);
 
         have_wifi = get_struct(CONFIG_TYPE, "wifi", &wifi, &size);
+        boot_screen();
 
         if (!have_wifi) {
             ESP_LOGE(TAG,"Provisioning finished but no WiFi credentials were stored");
@@ -220,7 +221,6 @@ void app_main(void)
     }
 
     // connect to wifi
-    boot_screen();
     ESP_LOGI(TAG, "Attempting WiFi connection to \"%s\"", wifi.ssid);
 
     if (!wifi_join(wifi.ssid, wifi.pwd)) {
