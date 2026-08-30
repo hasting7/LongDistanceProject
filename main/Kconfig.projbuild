@@ -1,0 +1,27 @@
+menu "Long Distance Tracker"
+
+    config UPDATE_SYSTEM_SCREENS
+        bool "Update system screens on boot"
+        default n
+        help
+            on every boot download the system screens
+
+    config SERVER_IP
+        string "Server address"
+        default "10.0.0.79"
+        help
+             name of server the ESP32 should connect to.
+
+    choice SERVER_PROTOCOL
+        prompt "Server protocol"
+        default SERVER_PROTOCOL_HTTP
+
+        config SERVER_PROTOCOL_HTTP
+            bool "HTTP"
+
+        config SERVER_PROTOCOL_HTTPS
+            bool "HTTPS"
+            
+    endchoice
+
+endmenu

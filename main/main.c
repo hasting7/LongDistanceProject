@@ -89,6 +89,14 @@ bool display(const char *endpoint) {
     return ok;
 }
 
+void system_reset() {
+	clear_segment(SCREEN_TYPE);
+	// re download system screens
+	store_screen_to_nvm("/system/boot.bmp", "boot");
+	store_screen_to_nvm("/system/error.bmp", "error");
+
+}
+
 
 /*
 if cannot connect to wifi, flash the qr code page and say "if you think this is wrong reboot"
@@ -123,6 +131,11 @@ void app_main(void)
 		error_screen();
 		return;
 	}
+	// update screens if system was told to
+	if (CONFIG_UPDATE_SYSTEM_SCREENS) {
+		system_reset();
+	}
+	
 
-	display("http://10.0.0.79/image");
+	display("/main/pacific.bmp");
 }

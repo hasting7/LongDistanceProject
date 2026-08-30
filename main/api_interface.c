@@ -1,15 +1,23 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
 
 #include "api_interface.h"
 #include "net_setup.h"
+
+
+#if CONFIG_SERVER_PROTOCOL_HTTPS
+#define SERVER_PROTOCOL "https"
+#else
+#define SERVER_PROTOCOL "http"
+#endif
 
 static const char *TAG = "API";
 
 typedef struct {
     ScreenData *screen;
-    const char *url;
+    char url[256];
 } api_get_job_t;
 
 static esp_err_t http_event_handler(esp_http_client_event_t *evt) {
@@ -51,11 +59,20 @@ static void api_get_job(void *pv) {
     esp_http_client_cleanup(client);
 }
 
-void api_get(ScreenData *screen, const char *url) {
+void api_get(ScreenData *screen, const char *path) {
     api_get_job_t job = {
-        .screen = screen,
-        .url = url
+        .screen = screen
     };
+
+    snprintf(
+        job.url,
+        sizeof(job.url),
+        "%s://%s%s",
+        SERVER_PROTOCOL,
+        CONFIG_SERVER_IP,
+        path
+    );
+    ESP_LOGI(TAG, "Requesting = %s", job.url);
 
     net_run_tls_task(api_get_job, &job);
 }

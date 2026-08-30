@@ -13,5 +13,4 @@ void delete_struct(const char *type, const char *recall_name);
 void clear_segment(const char *type);
 void disk_init();
 
-
 #endif
