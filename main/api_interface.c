@@ -2,6 +2,7 @@
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
+#include <time.h>
 
 #include "api_interface.h"
 #include "net_setup.h"
@@ -61,9 +62,10 @@ void api_get(ScreenData *screen, const char *path) {
     snprintf(
         job.url,
         sizeof(job.url),
-        "%s%s",
+        "%s%s?v=%lu",
         SERVER_NAME,
-        path
+        path,
+        (unsigned long)time(NULL)
     );
     ESP_LOGI(TAG, "Requesting = %s", job.url);
 
