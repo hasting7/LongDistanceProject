@@ -1,0 +1,9 @@
+# Required for HTTPS to actually be secure: without this, mbedTLS skips
+# certificate notBefore/notAfter checks entirely, so an unsynced or wrong
+# clock silently accepts expired certs instead of rejecting them.
+CONFIG_MBEDTLS_HAVE_TIME_DATE=y
+
+# CONFIG_MBEDTLS_COMPILER_OPTIMIZATION_NONE (the IDF default) makes TLS
+# handshakes slow and inflates stack usage; PERF trades a bit of code size
+# for speed and a smaller stack footprint per handshake.
+CONFIG_MBEDTLS_COMPILER_OPTIMIZATION_PERF=y

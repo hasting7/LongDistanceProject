@@ -7,6 +7,7 @@ idf_component_register(
         "api_interface.c"
         "eink_driver.c"
         "bitmap_builder.c"
+        "net_setup.c"
 
     INCLUDE_DIRS "includes"
 )

@@ -3,4 +3,7 @@ sdkconfig.old
 dependencies.lock
 managed_components/
 *.bmp
-server_side/.venv
+.cache
+.DS_Store
+sdkconfig
+sdkconfig.old

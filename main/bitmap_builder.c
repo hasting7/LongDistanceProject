@@ -6,7 +6,7 @@
 
 #define EINK_WIDTH			(128)
 #define EINK_HEIGHT 		(296)
-#define EINK_WIDTH_BYTES 	(EINK_WIDTH / 8) 
+#define EINK_WIDTH_BYTES 	(EINK_WIDTH / 8)
 
 const int EINK_BUFFER_SIZE = (EINK_WIDTH_BYTES * EINK_HEIGHT);
 #define MIN(a, b) ((a) < (b) ? (a) : (b))

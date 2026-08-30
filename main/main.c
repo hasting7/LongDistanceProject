@@ -7,6 +7,7 @@
 #include "wifi_interface.h"
 #include "gpio_interface.h"
 #include "api_interface.h"
+#include "net_setup.h"
 #include "eink_driver.h"
 
 #define WIFI_STATUS_PIN (2)
@@ -47,23 +48,34 @@ void store_screen_to_nvm(const char *endpoint, const char *name) {
 	delete_screen_data_instance(screen);
 }
  
-void boot_screen(void) {
+bool show_stored_screen(const char *name) {
 	uint8_t *screen_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
 	if (!screen_buffer) {
 		ESP_LOGE(TAG, "Failed to allocate screen buffer");
-		return;
+		return false;
 	}
- 
+
+	bool ok = false;
 	size_t size = EINK_BUFFER_SIZE; // must be set to capacity before get_struct call
-	if (get_struct(SCREEN_TYPE, "boot", screen_buffer, &size)) {
+	if (get_struct(SCREEN_TYPE, name, screen_buffer, &size)) {
 		ScreenData *screen = create_screen_data_instance_from_mem(screen_buffer, size);
 		uint8_t *bitmap = serve_bitmap(screen, 5000);
-		display_screen(bitmap);
+		ok = bitmap ? display_screen(bitmap) : false;
 		delete_screen_data_instance(screen);
 	} else {
-		ESP_LOGW(TAG, "NO BOOT SCREEN");
+		ESP_LOGW(TAG, "NO \"%s\" SCREEN", name);
 		free(screen_buffer);
-	}	
+	}
+
+	return ok;
+}
+
+void boot_screen(void) {
+	show_stored_screen("boot");
+}
+
+void error_screen(void) {
+	show_stored_screen("error");
 }
 
 bool display(const char *endpoint) {
@@ -84,22 +96,32 @@ if cannot connect to wifi, flash the qr code page and say "if you think this is 
 
 void app_main(void)
 {
-	xTaskCreate(wifi_join_state, "wifi_led", 4096, NULL, 5, NULL);
 	disk_init();
+	xTaskCreate(wifi_join_state, "wifi_led", 4096, NULL, 5, NULL);
 	eink_init();
 	boot_screen();
 	wifi_init();
-	vTaskDelay(pdMS_TO_TICKS(5000));
-
 
 	WifiDetails stored_wifi;
 	size_t size;
 	if (get_struct(CONFIG_TYPE, "wifi", &stored_wifi, &size)) {
 		if (!wifi_join(stored_wifi.ssid, stored_wifi.pwd)) {
+			error_screen();
 			return;
 		}
 	} else {
 		wifi_state = WIFI_FAILED;
+		error_screen();
+		return;
+	}
+
+	// Stall here until the clock is trustworthy: mbedTLS checks certificate
+	// notBefore/notAfter against the wall clock, so HTTPS requests made before
+	// this point are liable to fail (or worse, silently accept a bad cert).
+	if (!net_setup_wait_ready()) {
+		ESP_LOGE(TAG, "Network never became ready, refusing to make requests");
+		error_screen();
+		return;
 	}
 
 	display("http://10.0.0.79/image");
