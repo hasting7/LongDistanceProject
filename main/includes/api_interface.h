@@ -3,6 +3,14 @@
 
 #include "bitmap_builder.h"
 
+
+#if CONFIG_SERVER_ENVIRONMENT_CLOUD
+#define SERVER_NAME CONFIG_SERVER_CLOUD_IP
+#else
+#define SERVER_NAME CONFIG_SERVER_LOCAL_IP
+#endif
+
+
 void api_get(ScreenData *screen, const char *url);
 
 #endif

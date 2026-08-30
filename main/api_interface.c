@@ -7,12 +7,6 @@
 #include "net_setup.h"
 
 
-#if CONFIG_SERVER_PROTOCOL_HTTPS
-#define SERVER_PROTOCOL "https"
-#else
-#define SERVER_PROTOCOL "http"
-#endif
-
 static const char *TAG = "API";
 
 typedef struct {
@@ -67,9 +61,8 @@ void api_get(ScreenData *screen, const char *path) {
     snprintf(
         job.url,
         sizeof(job.url),
-        "%s://%s%s",
-        SERVER_PROTOCOL,
-        CONFIG_SERVER_IP,
+        "%s%s",
+        SERVER_NAME,
         path
     );
     ESP_LOGI(TAG, "Requesting = %s", job.url);

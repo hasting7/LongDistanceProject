@@ -1,41 +1,82 @@
 menu "Long Distance Tracker"
 
-    config UPDATE_SYSTEM_SCREENS
-        bool "Update system screens on boot"
-        default n
-        help
-            on every boot download the system screens
+    # ============================================================
+    # Boot Settings
+    # ============================================================
 
-    config SERVER_IP
-        string "Server address"
-        default "10.0.0.79"
-        help
-             name of server the ESP32 should connect to.
+    menu "Boot Settings"
 
-    choice SERVER_PROTOCOL
-        prompt "Server protocol"
-        default SERVER_PROTOCOL_HTTP
+        config UPDATE_SYSTEM_SCREENS
+            bool "Update system screens on boot"
+            default n
+            help
+                On every boot, download the system screens.
 
-        config SERVER_PROTOCOL_HTTP
-            bool "HTTP"
+    endmenu
 
-        config SERVER_PROTOCOL_HTTPS
-            bool "HTTPS"
-            
-    endchoice
 
-    config UPDATE_INTERVAL
-        int "Update interval (seconds)"
-        default 86400
-        range 1 2147483647
-        help
-            How often the device updates its display.
+    # ============================================================
+    # Server Settings
+    # ============================================================
 
-    config WIFI_MAXIMUM_RETRY
-        int "Max Wifi connection retries attempts"
-        default 5
-        range 1 20
-        help
-            How many retry attempts will be made before throwing an error.
+    menu "Server Settings"
+
+        choice SERVER_ENVIRONMENT
+            prompt "Server environment"
+            default SERVER_ENVIRONMENT_CLOUD
+
+            config SERVER_ENVIRONMENT_LOCAL
+                bool "Local"
+
+            config SERVER_ENVIRONMENT_CLOUD
+                bool "Cloud"
+
+        endchoice
+
+        config SERVER_LOCAL_IP
+            string "Local server address"
+            default "http://10.0.0.79"
+            help
+                IP address or hostname of the local server.
+
+        config SERVER_CLOUD_IP
+            string "Cloud server address"
+            default "https://benjaminhastings1211.github.io"
+            help
+                IP address or hostname of the cloud server.
+
+    endmenu
+
+
+    # ============================================================
+    # WiFi Settings
+    # ============================================================
+
+    menu "WiFi Settings"
+
+        config WIFI_MAXIMUM_RETRY
+            int "Max WiFi connection retry attempts"
+            default 5
+            range 1 20
+            help
+                How many retry attempts will be made before giving up.
+
+    endmenu
+
+
+    # ============================================================
+    # System / Display Settings
+    # ============================================================
+
+    menu "System Settings"
+
+        config UPDATE_INTERVAL
+            int "Update interval (seconds)"
+            default 86400
+            range 1 2147483647
+            help
+                How often the device updates its display.
+
+    endmenu
 
 endmenu
