@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Set up your tracker</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <h1>Set up your tracker</h1>
+    <p class="sub">Enter the details of the WiFi network you want the device to join.</p>
+    <form method="POST" action="/connect">
+      <label for="ssid">Network name</label>
+      <input id="ssid" name="ssid" type="text" maxlength="32" required
+             autocapitalize="off" autocorrect="off" spellcheck="false" autofocus>
+
+      <label for="pwd">Password</label>
+      <div class="pwd-row">
+        <input id="pwd" name="pwd" type="password" maxlength="63"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="button" class="show-btn" data-target="pwd">Show</button>
+      </div>
+
+      <label for="pwd_confirm">Confirm password</label>
+      <div class="pwd-row">
+        <input id="pwd_confirm" name="pwd_confirm" type="password" maxlength="63"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="button" class="show-btn" data-target="pwd_confirm">Show</button>
+      </div>
+
+      <button type="submit" class="submit-btn">Save &amp; connect</button>
+    </form>
+    <p class="note">The tracker will connect to your network after saving.</p>
+  </main>
+
+  <script>
+    document.querySelectorAll(".show-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var input = document.getElementById(btn.dataset.target);
+        var showing = input.type === "text";
+        input.type = showing ? "password" : "text";
+        btn.textContent = showing ? "Show" : "Hide";
+      });
+    });
+  </script>
+</body>
+</html>

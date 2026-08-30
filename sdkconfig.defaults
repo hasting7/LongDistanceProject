@@ -7,3 +7,10 @@ CONFIG_MBEDTLS_HAVE_TIME_DATE=y
 # handshakes slow and inflates stack usage; PERF trades a bit of code size
 # for speed and a smaller stack footprint per handshake.
 CONFIG_MBEDTLS_COMPILER_OPTIMIZATION_PERF=y
+
+# The default single-app table's 1MB app partition is too small for this
+# project (provisioning portal + embedded assets pushed it to 100% full and
+# then over). This 2MB chip has ~1MB of flash that no partition even claims,
+# so grow into it instead of trimming code: 1.5MB app, same 24KB NVS/4KB
+# phy_init as before.
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y

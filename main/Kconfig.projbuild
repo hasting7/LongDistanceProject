@@ -6,11 +6,65 @@ menu "Long Distance Tracker"
 
     menu "Boot Settings"
 
+        choice WIFI_BOOT_MODE
+            prompt "WiFi boot mode"
+            default WIFI_BOOT_MODE_NORMAL
+
+            config WIFI_BOOT_MODE_NORMAL
+                bool "Normal"
+                help
+                    Use stored WiFi credentials if available.
+                    If no stored credentials exist, enter provisioning mode.
+
+            config WIFI_BOOT_MODE_FORCE_PROVISIONING
+                bool "Force provisioning"
+                help
+                    Ignore and clear any stored WiFi credentials on boot.
+                    Always enter WiFi provisioning mode.
+
+            config WIFI_BOOT_MODE_DEFAULT
+                bool "Use default WiFi"
+                help
+                    Ignore stored WiFi credentials and connect using the
+                    default WiFi credentials configured in WiFi Settings.
+
+        endchoice
+
         config UPDATE_SYSTEM_SCREENS
             bool "Update system screens on boot"
             default n
             help
-                On every boot, download the system screens.
+                Download updated system screens every time the device boots.
+
+    endmenu
+
+
+    # ============================================================
+    # WiFi Settings
+    # ============================================================
+
+    menu "WiFi Settings"
+
+        config WIFI_DEFAULT_SSID
+            string "Default WiFi SSID"
+            default ""
+            help
+                SSID of the WiFi network used when "Use default WiFi"
+                is selected as the WiFi boot mode.
+
+        config WIFI_DEFAULT_PASSWORD
+            string "Default WiFi password"
+            default ""
+            help
+                Password for the default WiFi network.
+
+        config WIFI_MAXIMUM_RETRY
+            int "Maximum WiFi connection retry attempts"
+            default 5
+            range 1 20
+            help
+                Maximum number of attempts made when connecting to WiFi
+                before giving up.
 
     endmenu
 
@@ -37,38 +91,45 @@ menu "Long Distance Tracker"
             string "Local server address"
             default "http://10.0.0.79"
             help
-                IP address or hostname of the local server.
+                Address of the local server.
 
         config SERVER_CLOUD_IP
             string "Cloud server address"
             default "https://benjaminhastings1211.github.io"
             help
-                IP address or hostname of the cloud server.
+                Address of the cloud server.
 
     endmenu
 
 
     # ============================================================
-    # WiFi Settings
+    # Device Settings
     # ============================================================
 
-    menu "WiFi Settings"
+    menu "Device Settings"
 
-        config WIFI_MAXIMUM_RETRY
-            int "Max WiFi connection retry attempts"
-            default 5
-            range 1 20
+        config DEVICE_NAME
+            string "Device name"
+            default "LongDistanceTracker"
             help
-                How many retry attempts will be made before giving up.
+                Name used to identify the device on the local network
+                and during WiFi provisioning.
+
+        config DEVICE_PASSWORD
+            string "Device password"
+            default "password"
+            help
+                Password used to protect the device's provisioning
+                access point.
 
     endmenu
 
 
     # ============================================================
-    # System / Display Settings
+    # Display Settings
     # ============================================================
 
-    menu "System Settings"
+    menu "Display Settings"
 
         config UPDATE_INTERVAL
             int "Update interval (seconds)"

@@ -10,74 +10,99 @@
 #include "api_interface.h"
 #include "net_setup.h"
 #include "eink_driver.h"
+#include "provisioning_interface.h"
 
 #define WIFI_STATUS_PIN (2)
 
 static const char *TAG = "Main";
 
 
-void wifi_join_state(void *pvParameters)
-{
-	int current_state = 0;
-	gpio_register_output(WIFI_STATUS_PIN);
+void wifi_join_state(void *pvParameters) {
+    int current_state = 0;
+    gpio_register_output(WIFI_STATUS_PIN);
+
     while (1) {
         if (wifi_state == WIFI_PENDING) {
-        	current_state ^= 1;
-        	gpio_power(WIFI_STATUS_PIN, current_state);
+            current_state ^= 1;
+            gpio_power(WIFI_STATUS_PIN, current_state);
         } else if (wifi_state == WIFI_FAILED) {
-        	gpio_power(WIFI_STATUS_PIN, false);
-        	break;
+            gpio_power(WIFI_STATUS_PIN, false);
+            break;
         } else if (wifi_state == WIFI_CONNECTED) {
-        	gpio_power(WIFI_STATUS_PIN, true);
-        	break;
+            gpio_power(WIFI_STATUS_PIN, true);
+            break;
         }
+
         vTaskDelay(pdMS_TO_TICKS(750));
     }
+
     vTaskDelete(NULL);
 }
 
+
 void store_screen_to_nvm(const char *endpoint, const char *name) {
-	ScreenData *screen = create_screen_data_instance();
-	api_get(screen, endpoint);
-	uint8_t *screen_data = serve_bitmap(screen, 5000);
-	if (!screen_data) {
-		ESP_LOGE(TAG, "Screen not ready, not storing \"%s\" to NVM", name);
-	} else {
-		store_struct(SCREEN_TYPE, name, (void *) screen_data, EINK_BUFFER_SIZE);
-	}
- 
-	delete_screen_data_instance(screen);
+    ScreenData *screen = create_screen_data_instance();
+    api_get(screen, endpoint);
+
+    uint8_t *screen_data = serve_bitmap(screen, 5000);
+
+    if (!screen_data) {
+        ESP_LOGE(TAG, "Screen not ready, not storing \"%s\" to NVM", name);
+    } else {
+        store_struct(
+            SCREEN_TYPE,
+            name,
+            (void *)screen_data,
+            EINK_BUFFER_SIZE
+        );
+    }
+
+    delete_screen_data_instance(screen);
 }
- 
+
+
 bool show_stored_screen(const char *name) {
-	uint8_t *screen_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
-	if (!screen_buffer) {
-		ESP_LOGE(TAG, "Failed to allocate screen buffer");
-		return false;
-	}
+    uint8_t *screen_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
 
-	bool ok = false;
-	size_t size = EINK_BUFFER_SIZE; // must be set to capacity before get_struct call
-	if (get_struct(SCREEN_TYPE, name, screen_buffer, &size)) {
-		ScreenData *screen = create_screen_data_instance_from_mem(screen_buffer, size);
-		uint8_t *bitmap = serve_bitmap(screen, 5000);
-		ok = bitmap ? display_screen(bitmap) : false;
-		delete_screen_data_instance(screen);
-	} else {
-		ESP_LOGW(TAG, "NO \"%s\" SCREEN", name);
-		free(screen_buffer);
-	}
+    if (!screen_buffer) {
+        ESP_LOGE(TAG, "Failed to allocate screen buffer");
+        return false;
+    }
 
-	return ok;
+    bool ok = false;
+    size_t size = EINK_BUFFER_SIZE;
+
+    if (get_struct(SCREEN_TYPE, name, screen_buffer, &size)) {
+        ScreenData *screen =
+            create_screen_data_instance_from_mem(screen_buffer, size);
+
+        uint8_t *bitmap = serve_bitmap(screen, 5000);
+        ok = bitmap ? display_screen(bitmap) : false;
+
+        delete_screen_data_instance(screen);
+    } else {
+        ESP_LOGW(TAG, "NO \"%s\" SCREEN", name);
+        free(screen_buffer);
+    }
+
+    return ok;
 }
+
 
 void boot_screen(void) {
-	show_stored_screen("boot");
+    show_stored_screen("boot");
 }
 
+
 void error_screen(void) {
-	show_stored_screen("error");
+    show_stored_screen("error");
 }
+
+
+void qr_screen(void) {
+    show_stored_screen("qr");
+}
+
 
 bool display(const char *endpoint) {
     ScreenData *screen = create_screen_data_instance();
@@ -87,56 +112,132 @@ bool display(const char *endpoint) {
     bool ok = bitmap ? display_screen(bitmap) : false;
 
     delete_screen_data_instance(screen);
+
     return ok;
 }
 
-void system_reset() {
-	clear_segment(SCREEN_TYPE);
-	// re download system screens
-	store_screen_to_nvm("/system/boot.bmp", "boot");
-	store_screen_to_nvm("/system/error.bmp", "error");
 
+void system_reset(void) {
+    clear_segment(SCREEN_TYPE);
+
+    store_screen_to_nvm("/system/boot.bmp", "boot");
+    store_screen_to_nvm("/system/error.bmp", "error");
+    store_screen_to_nvm("/system/qr.bmp", "qr");
 }
 
 
-/*
-if cannot connect to wifi, flash the qr code page and say "if you think this is wrong reboot"
-*/
-
 void app_main(void)
 {
-	disk_init();
-	xTaskCreate(wifi_join_state, "wifi_led", 4096, NULL, 5, NULL);
-	eink_init();
-	boot_screen();
-	wifi_init();
+    disk_init();
 
-	WifiDetails stored_wifi;
-	size_t size;
-	if (get_struct(CONFIG_TYPE, "wifi", &stored_wifi, &size)) {
-		if (!wifi_join(stored_wifi.ssid, stored_wifi.pwd)) {
-			error_screen();
-			return;
-		}
-	} else {
-		wifi_state = WIFI_FAILED;
-		error_screen();
-		return;
-	}
+    xTaskCreate( wifi_join_state, "wifi_led", 2048, NULL, 5, NULL);
 
-	// Stall here until the clock is trustworthy: mbedTLS checks certificate
-	// notBefore/notAfter against the wall clock, so HTTPS requests made before
-	// this point are liable to fail (or worse, silently accept a bad cert).
-	if (!net_setup_wait_ready()) {
-		ESP_LOGE(TAG, "Network never became ready, refusing to make requests");
-		error_screen();
-		return;
-	}
-	// update screens if system was told to
-#ifdef CONFIG_UPDATE_SYSTEM_SCREENS
-		system_reset();
+    eink_init();
+    boot_screen();
+
+    wifi_init();
+
+
+    // ============================================================
+    // Determine WiFi credentials / provisioning mode
+    // ====================================================
+    WifiDetails wifi;
+    bool have_wifi = false;
+
+#if CONFIG_WIFI_BOOT_MODE_FORCE_PROVISIONING
+
+    /*
+     * Force provisioning:
+     * Always delete stored credentials and enter provisioning mode.
+     */
+    ESP_LOGW(TAG,"WiFi boot mode: FORCE PROVISIONING");
+
+    ESP_LOGW(TAG,"Clearing any stored WiFi credentials");
+
+    delete_struct(CONFIG_TYPE, "wifi");
+
+#elif CONFIG_WIFI_BOOT_MODE_DEFAULT
+
+    /*
+     * Default WiFi:
+     * Ignore anything stored in NVS and use the credentials
+     * compiled into the firmware through menuconfig.
+     */
+    ESP_LOGI(TAG,"WiFi boot mode: DEFAULT WIFI");
+
+    strncpy(wifi.pwd,CONFIG_WIFI_DEFAULT_PASSWORD,sizeof(wifi.pwd) - 1);
+    strncpy(wifi.ssid,CONFIG_WIFI_DEFAULT_SSID,sizeof(wifi.ssid) - 1);
+    wifi.ssid[sizeof(wifi.ssid) - 1] = '\0';
+    wifi.pwd[sizeof(wifi.pwd) - 1] = '\0';
+
+    have_wifi = true;
+
+#else
+
+    /*
+     * Normal:
+     * Try the credentials stored in NVS.
+     * If none exist, fall back to provisioning.
+     */
+    ESP_LOGI(TAG,"WiFi boot mode: NORMAL");
+
+    size_t size = sizeof(wifi);
+
+    have_wifi = get_struct(CONFIG_TYPE,"wifi",&wifi,&size);
+
 #endif
-	
 
-	display("/main/pacific.bmp");
+
+    // ============================================================
+    // Provision if credentials are unavailable
+    // ============================================================
+
+    if (!have_wifi) {
+
+        ESP_LOGW(TAG,"No stored WiFi credentials, entering provisioning mode");
+
+        qr_screen();
+
+        if (!provisioning_start()) {
+            ESP_LOGE(TAG,"Failed to start provisioning");
+
+            wifi_state = WIFI_FAILED;
+            error_screen();
+            return;
+        }
+
+        size_t size = sizeof(wifi);
+
+        have_wifi = get_struct(CONFIG_TYPE, "wifi", &wifi, &size);
+
+        if (!have_wifi) {
+            ESP_LOGE(TAG,"Provisioning finished but no WiFi credentials were stored");
+
+            wifi_state = WIFI_FAILED;
+            error_screen();
+            return;
+        }
+    }
+
+    // connect to wifi
+    boot_screen();
+    ESP_LOGI(TAG, "Attempting WiFi connection to \"%s\"", wifi.ssid);
+
+    if (!wifi_join(wifi.ssid, wifi.pwd)) {
+        ESP_LOGE(TAG,"Failed to connect to WiFi");
+        error_screen();
+        return;
+    }
+
+    if (!net_setup_wait_ready()) {
+        ESP_LOGE(TAG,"Network never became ready, refusing to make requests");
+        error_screen();
+        return;
+    }
+#ifdef CONFIG_UPDATE_SYSTEM_SCREENS
+    ESP_LOGI(TAG,"Updating system screens");
+    system_reset();
+#endif
+
+    display("/main/pacific.bmp");
 }

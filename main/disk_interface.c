@@ -2,6 +2,8 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
+#include "esp_image_format.h"
 #include <stdio.h>
 
 const char* CONFIG_TYPE = "config";
@@ -46,6 +48,57 @@ bool get_struct(const char *type, const char *recall_name, void *data_out, size_
 	}
 	ESP_ERROR_CHECK(err);
 	return true;
+}
+
+static void log_app_partition_info() {
+    const esp_partition_t *partition = esp_ota_get_running_partition();
+    if (partition == NULL) {
+        ESP_LOGE("APP", "Could not find running app partition");
+        return;
+    }
+
+    esp_partition_pos_t part_pos = {
+        .offset = partition->address,
+        .size = partition->size,
+    };
+
+    // image_len is the actual size of the flashed binary (code + embedded
+    // assets + appended SHA-256 digest) -- the same number esptool prints
+    // as "binary size" after a build, just read back from flash at runtime
+    // instead of from the .bin file.
+    esp_image_metadata_t metadata;
+    if (esp_image_get_metadata(&part_pos, &metadata) != ESP_OK) {
+        ESP_LOGE("APP", "Could not read app image metadata");
+        return;
+    }
+
+    size_t total_bytes = partition->size;
+    size_t used_bytes = metadata.image_len;
+    size_t free_bytes = total_bytes - used_bytes;
+
+    float usage_percent =
+        ((float)used_bytes / (float)total_bytes) * 100.0f;
+
+    printf("\n===== APP INFO =====\n");
+
+    printf("App partition:  %s\n", partition->label);
+
+    printf("Partition size: %zu bytes (%.2f KB)\n",
+           total_bytes,
+           total_bytes / 1024.0f);
+
+    printf("App image size: %zu bytes (%.2f KB)\n",
+           used_bytes,
+           used_bytes / 1024.0f);
+
+    printf("App free:       %zu bytes (%.2f KB)\n",
+           free_bytes,
+           free_bytes / 1024.0f);
+
+    printf("App usage:      %.1f%%\n",
+           usage_percent);
+
+    printf("====================\n\n");
 }
 
 void disk_init() {
@@ -105,6 +158,8 @@ void disk_init() {
            usage_percent);
 
     printf("====================\n\n");
+
+    log_app_partition_info();
 }
 
 void delete_struct(const char *type, const char *recall_name) {
