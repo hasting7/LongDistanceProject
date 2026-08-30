@@ -195,6 +195,12 @@ bool display_screen(uint8_t *frame_ptr) {
         ESP_LOGE(TAG, "Screen not complete, cannot display.");
         return false;
     }
+#ifdef CONFIG_DARK_MODE 
+    ESP_LOGI(TAG, "Updating screen to dark mode");
+    for (int i = 0; i < EPD_BUF_SIZE; i++) {
+        frame_ptr[i] ^= 0xff;
+    }
+#endif
     ESP_LOGI(TAG, "Got framebuf, waking display");
 
     if (!epd_wake_and_configure()) {

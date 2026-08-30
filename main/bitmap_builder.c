@@ -1,4 +1,6 @@
 #include <string.h>
+#include "sdkconfig.h"
+
 
 #include "esp_log.h"
 #include "esp_system.h"
@@ -15,9 +17,6 @@ static const char *TAG = "BitMap Builder";
 static int width_padding_bytes = 0;
 
 
-/* 
-	ENSURE ONLY ONE SCREENDATA STRUCT IS BEING CREATED AT AA TIME
-*/
 typedef struct screen_data_t{
 	uint8_t *bitmap_buffer;
 	ScreenStatus status;

@@ -122,6 +122,12 @@ menu "Long Distance Tracker"
                 Password used to protect the device's provisioning
                 access point.
 
+        config DARK_MODE
+            bool "Dark Mode"
+            default n
+            help
+                Should the display be rendered in dark mode?
+
     endmenu
 
 
