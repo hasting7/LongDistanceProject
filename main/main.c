@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
 
 #include "disk_interface.h"
 #include "wifi_interface.h"
@@ -132,9 +133,9 @@ void app_main(void)
 		return;
 	}
 	// update screens if system was told to
-	if (CONFIG_UPDATE_SYSTEM_SCREENS) {
+#ifdef CONFIG_UPDATE_SYSTEM_SCREENS
 		system_reset();
-	}
+#endif
 	
 
 	display("/main/pacific.bmp");
