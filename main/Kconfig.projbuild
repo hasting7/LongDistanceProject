@@ -31,7 +31,7 @@ menu "Long Distance Tracker"
         endchoice
 
         config UPDATE_SYSTEM_SCREENS
-            bool "Update system screens on boot"
+            bool "Force system screen download on boot"
             default n
             help
                 Download updated system screens every time the device boots.

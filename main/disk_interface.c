@@ -9,6 +9,7 @@
 const char* CONFIG_TYPE = "config";
 const char* USER_TYPE = "user";
 const char* SCREEN_TYPE = "screen";
+const char* SCREEN_ID_TYPE = "screenid";
 
 
 void store_struct(const char *type, const char *recall_name, void *data_in, size_t struct_size) {

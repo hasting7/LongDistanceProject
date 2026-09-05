@@ -29,11 +29,15 @@ typedef struct screen_data_t{
 	SemaphoreHandle_t ready_sem;
 } ScreenData;
 
-ScreenData *create_screen_data_instance() {
+ScreenData *create_screen_data_instance(uint8_t *existing_buffer) {
 	ScreenData *ptr = malloc(sizeof(ScreenData));
-	uint8_t *bitmap_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
 
-	ptr->bitmap_buffer = bitmap_buffer;
+	if (!existing_buffer) {
+		ptr->bitmap_buffer = calloc(EINK_BUFFER_SIZE, sizeof(uint8_t));
+	} else {
+		ptr->bitmap_buffer = existing_buffer;
+		// ADD CHECKS TO MAKE SURE BUFFER IS BIG ENOUGH
+	}
 	ptr->consumed_buffer = 0;
 	ptr->row_consumed = 0;
 	ptr->total_bitmap_size = 0;

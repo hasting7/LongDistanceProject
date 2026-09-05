@@ -6,6 +6,7 @@
 extern const char* CONFIG_TYPE;
 extern const char* USER_TYPE;
 extern const char* SCREEN_TYPE;
+extern const char* SCREEN_ID_TYPE;
 
 void store_struct(const char *type, const char *recall_name, void *data_in, size_t struct_size);
 bool get_struct(const char *type, const char *recall_name, void *data_out, size_t *struct_size);
