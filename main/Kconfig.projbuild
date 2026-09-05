@@ -128,6 +128,24 @@ menu "Long Distance Tracker"
             help
                 Should the display be rendered in dark mode?
 
+        choice TIMEZONE
+            prompt "Device Timezone"
+            default TIMEZONE_EASTERN
+
+            config TIMEZONE_EASTERN
+                bool "Eastern"
+
+            config TIMEZONE_CENTRAL
+                bool "Central"
+
+            config TIMEZONE_MOUNTAIN
+                bool "Mountain"
+
+            config TIMEZONE_PACIFIC
+                bool "Pacific"
+
+        endchoice
+
     endmenu
 
 

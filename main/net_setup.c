@@ -9,6 +9,7 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
+#include "sdkconfig.h"
 
 #include "net_setup.h"
 #include "wifi_interface.h"
@@ -17,8 +18,7 @@ static const char *TAG = "Net";
 
 // TODO: make this configurable instead of hardcoded once we have a source
 // (e.g. IP geolocation or user setting) for the device's real timezone.
-#define TIMEZONE_NAME "eastern"
-#define TIMEZONE_POSIX_TZ "EST5EDT,M3.2.0,M11.1.0/2"
+
 
 #define NET_TLS_TASK_STACK 10240
 #define NET_TLS_SELFTEST_URL "https://www.google.com/generate_204"
@@ -189,3 +189,4 @@ bool net_tls_selftest(const char *url) {
 
     return net_run_tls_task(net_tls_selftest_job, &job);
 }
+

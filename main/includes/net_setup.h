@@ -3,6 +3,20 @@
 
 #include <stdbool.h>
 
+#if CONFIG_TIMEZONE_EASTERN
+#define TIMEZONE_NAME "eastern"
+#define TIMEZONE_POSIX_TZ "EST5EDT,M3.2.0,M11.1.0/2"
+#elif CONFIG_TIMEZONE_CENTRAL
+#define TIMEZONE_NAME "central"
+#define TIMEZONE_POSIX_TZ "CST6CDT,M3.2.0,M11.1.0/2"
+#elif CONFIG_TIMEZONE_MOUNTAIN
+#define TIMEZONE_NAME "mountain"
+#define TIMEZONE_POSIX_TZ "MST7MDT,M3.2.0,M11.1.0/2"
+#elif CONFIG_TIMEZONE_PACIFIC
+#define TIMEZONE_NAME "pacific"
+#define TIMEZONE_POSIX_TZ "PST8PDT,M3.2.0,M11.1.0/2"
+#endif
+
 /* Blocks until everything HTTPS needs is in place (currently: a trustworthy
  * wall-clock time from SNTP). Call after wifi_join() returns true. Idempotent.
  * Returns false if the device never became ready. */

@@ -145,17 +145,20 @@ void qr_screen(void) {
     show_stored_screen("qr");
 }
 
+bool pull_and_display_latest() {
+    char endpoint[64];
+    snprintf(endpoint, sizeof(endpoint), "/main/%s", TIMEZONE_NAME);
 
-bool display(const char *endpoint) {
     uint8_t new_id = cloud_check_id(endpoint);
     uint8_t current_id = get_screen_id(CURRENT_SCREEN);
-    ESP_LOGI(TAG,"Currently displaying screen id %d", current_id);
+    ESP_LOGI(TAG, "Currently displaying screen id %d", current_id);
 
     if (new_id == current_id) {
-        ESP_LOGI(TAG,"Screen %s (id = %d) is already being displayed, skipping download.", endpoint, new_id);
+        ESP_LOGI(TAG, "Screen %s (id = %d) is already being displayed, skipping download.", endpoint, new_id);
         return true;
     }
-    ESP_LOGI(TAG,"Screen %s (id = %d) is not being displayed, downloading...", endpoint, new_id);
+
+    ESP_LOGI(TAG, "Screen %s (id = %d) is not being displayed, downloading...", endpoint, new_id);
 
     ScreenData *screen = create_screen_data_instance(NULL);
 
@@ -290,7 +293,7 @@ void app_main(void)
 
 
     while (true) {
-        display("/main/pacific");
+        pull_and_display_latest();
         vTaskDelay(pdMS_TO_TICKS(5000));
     }    
 }
