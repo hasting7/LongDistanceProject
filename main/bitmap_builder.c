@@ -147,7 +147,6 @@ void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t b
 		if (screen->status != NOT_STARTED) {
 			// why are we getting another packet start if we are in progress
 			ESP_LOGE(TAG, "Screen already buildng but intro packet received.");
-			esp_restart(); // MAYBE??
 		}
 		// new image
 		consumed_buffer = reset_bitmap_buffer(screen, packet_buffer);

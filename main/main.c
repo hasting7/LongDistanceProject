@@ -2,17 +2,20 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "driver/gpio.h"
+#include "esp_sleep.h"
 #include "sdkconfig.h"
 
 #include "disk_interface.h"
 #include "wifi_interface.h"
-#include "gpio_interface.h"
 #include "api_interface.h"
 #include "net_setup.h"
 #include "eink_driver.h"
 #include "provisioning_interface.h"
 
 #define WIFI_STATUS_PIN (2)
+#define PROVISION_BUTTON_GPIO (0)
 
 
 
@@ -38,17 +41,18 @@ void set_screen_id(const char *name, uint8_t id) {
 
 void wifi_join_state(void *pvParameters) {
     int current_state = 0;
-    gpio_register_output(WIFI_STATUS_PIN);
+    gpio_set_direction(WIFI_STATUS_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(WIFI_STATUS_PIN, 0);
 
     while (1) {
         if (wifi_state == WIFI_PENDING) {
             current_state ^= 1;
-            gpio_power(WIFI_STATUS_PIN, current_state);
+            gpio_set_level(WIFI_STATUS_PIN, current_state);
         } else if (wifi_state == WIFI_FAILED) {
-            gpio_power(WIFI_STATUS_PIN, false);
+            gpio_set_level(WIFI_STATUS_PIN, 0);
             break;
         } else if (wifi_state == WIFI_CONNECTED) {
-            gpio_power(WIFI_STATUS_PIN, true);
+            gpio_set_level(WIFI_STATUS_PIN, 1);
             break;
         }
 
@@ -56,6 +60,22 @@ void wifi_join_state(void *pvParameters) {
     }
 
     vTaskDelete(NULL);
+}
+
+static void provision_button_task(void *pv)
+{
+    while (gpio_get_level(GPIO_NUM_27) == 0) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    while (1) {
+        if (gpio_get_level(GPIO_NUM_27) == 0) {
+            ESP_LOGI(TAG, "Provision button pressed");
+            esp_restart();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
 
 
@@ -175,13 +195,54 @@ bool pull_and_display_latest() {
 }
 
 
+void enter_deepsleep(const char *reasoning)
+{
+    if (strncmp(reasoning, "Error", 5) == 0) {
+        error_screen();
+        ESP_LOGE(TAG, "Deep sleeping for %d seconds... %s",
+                 CONFIG_UPDATE_INTERVAL, reasoning);
+    } else {
+        ESP_LOGI(TAG, "Deep sleeping for %d seconds... %s",
+                 CONFIG_UPDATE_INTERVAL, reasoning);
+    }
+
+    esp_sleep_enable_timer_wakeup(
+        (uint64_t)CONFIG_UPDATE_INTERVAL * 1000000ULL
+    );
+
+    esp_sleep_enable_ext1_wakeup(
+        1ULL << PROVISION_BUTTON_GPIO,
+        ESP_EXT1_WAKEUP_ALL_LOW
+    );
+
+    esp_deep_sleep_start();
+}
+
 void app_main(void)
 {
+    xTaskCreate( provision_button_task,"provision_button",2048,NULL,5,NULL);
     disk_init();
     eink_init();
-    xTaskCreate( wifi_join_state, "wifi_led", 2048, NULL, 5, NULL);
 
-    boot_screen();
+    gpio_set_direction(PROVISION_BUTTON_GPIO, GPIO_MODE_INPUT);
+    gpio_pullup_en(PROVISION_BUTTON_GPIO);
+
+    esp_reset_reason_t reason = esp_reset_reason();
+    esp_sleep_wakeup_cause_t wakeup = esp_sleep_get_wakeup_causes();
+    ESP_LOGW(TAG, "WAKEUP = %d, RESET = %d", wakeup, reason);
+    if ((wakeup == 8 && reason == 8) || (wakeup == 1 && reason == 3)) {
+        // Physical RST / button
+        delete_struct(CONFIG_TYPE, "wifi");
+        boot_screen();
+    } else if (wakeup == 16 && reason == 8) {
+        // Deep sleep timer
+        // Normal update
+
+    } else if (wakeup == 1 && reason == 1) {
+        boot_screen();
+    }
+
+    xTaskCreate( wifi_join_state, "wifi_led", 2048, NULL, 5, NULL);
 
     wifi_init();
 
@@ -250,8 +311,7 @@ void app_main(void)
             ESP_LOGE(TAG,"Failed to start provisioning");
 
             wifi_state = WIFI_FAILED;
-            error_screen();
-            return;
+            enter_deepsleep("Error: failed to provision wifi");
         }
 
         size_t size = sizeof(wifi);
@@ -263,8 +323,7 @@ void app_main(void)
             ESP_LOGE(TAG,"Provisioning finished but no WiFi credentials were stored");
 
             wifi_state = WIFI_FAILED;
-            error_screen();
-            return;
+            enter_deepsleep("Error: provisioned wifi credentials were lost");
         }
     }
 
@@ -273,27 +332,24 @@ void app_main(void)
 
     if (!wifi_join(wifi.ssid, wifi.pwd)) {
         ESP_LOGE(TAG,"Failed to connect to WiFi");
-        error_screen();
-        return;
+        enter_deepsleep("Error: Failed to connect to Wifi");
     }
 
     if (!net_setup_wait_ready()) {
         ESP_LOGW(TAG,"Network never became ready, refusing to make requests");
-        error_screen();
-        return;
+        enter_deepsleep("Error: Network never became ready, refusing to make requests");
     }
 
 #ifdef CONFIG_UPDATE_SYSTEM_SCREENS
     ESP_LOGI(TAG,"Force Updating system screens");
     clear_segment(SCREEN_ID_TYPE);
 #endif
+
+    pull_and_display_latest();
+
     store_screen_to_nvm("/system/boot", "boot");
     store_screen_to_nvm("/system/error", "error");
     store_screen_to_nvm("/system/qr", "qr");
 
-
-    while (true) {
-        pull_and_display_latest();
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }    
+    enter_deepsleep("Update Complete");
 }
