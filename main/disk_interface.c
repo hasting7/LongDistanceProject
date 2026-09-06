@@ -35,6 +35,8 @@ bool get_struct(const char *type, const char *recall_name, void *data_out, size_
 	}
 	ESP_ERROR_CHECK(err);
 
+	size_t expected_size = *struct_size;
+
 	err = nvs_get_blob(
 	    handle,
 	    recall_name,
@@ -43,11 +45,30 @@ bool get_struct(const char *type, const char *recall_name, void *data_out, size_
 	);
 	nvs_close(handle);
 
-	if (err == ESP_ERR_NVS_NOT_FOUND) {
+	// NOT_FOUND is a normal "nothing stored yet". INVALID_LENGTH means the
+	// caller's buffer was too small for what's stored -- most likely a
+	// struct layout that changed between firmware versions on the same
+	// device. Neither is a real error: treat both as "no usable data" so a
+	// stale/incompatible blob triggers re-provisioning instead of a
+	// panic-reboot loop.
+	if (err == ESP_ERR_NVS_NOT_FOUND || err == ESP_ERR_NVS_INVALID_LENGTH) {
+	    ESP_LOGW("NVS", "Struct \"%s\" in \"%s\" unavailable (%s), treating as absent",
+	             recall_name, type, esp_err_to_name(err));
 	    *struct_size = 0;
 	    return false;
 	}
 	ESP_ERROR_CHECK(err);
+
+	// The read succeeded but returned fewer bytes than the caller expected
+	// (the buffer was big enough, but the stored blob is a smaller/older
+	// layout) -- the tail of data_out would otherwise be left uninitialized.
+	if (*struct_size != expected_size) {
+	    ESP_LOGW("NVS", "Struct \"%s\" in \"%s\" size mismatch (expected %u, got %u), treating as absent",
+	             recall_name, type, (unsigned)expected_size, (unsigned)*struct_size);
+	    *struct_size = 0;
+	    return false;
+	}
+
 	return true;
 }
 
