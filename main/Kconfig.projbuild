@@ -61,7 +61,7 @@ menu "Long Distance Tracker"
         config WIFI_MAXIMUM_RETRY
             int "Maximum WiFi connection retry attempts"
             default 5
-            range 1 20
+            range 1 50
             help
                 Maximum number of attempts made when connecting to WiFi
                 before giving up.
@@ -155,12 +155,22 @@ menu "Long Distance Tracker"
 
     menu "Display Settings"
 
-        config UPDATE_INTERVAL
-            int "Update interval (seconds)"
-            default 86400
+        config SUCCESS_UPDATE_INTERVAL
+            int "Successful update interval (seconds)"
+            default 3600
             range 1 2147483647
             help
-                How often the device updates its display.
+                How long the device should sleep after a successful update
+                before waking and updating the display again.
+
+        config FAILURE_UPDATE_INTERVAL
+            int "Failed update interval (seconds)"
+            default 300
+            range 1 2147483647
+            help
+                How long the device should sleep after a failed update
+                before waking and retrying the update.
+
 
     endmenu
 

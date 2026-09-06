@@ -64,12 +64,12 @@ void wifi_join_state(void *pvParameters) {
 
 static void provision_button_task(void *pv)
 {
-    while (gpio_get_level(GPIO_NUM_27) == 0) {
+    while (gpio_get_level(PROVISION_BUTTON_GPIO) == 0) {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
     while (1) {
-        if (gpio_get_level(GPIO_NUM_27) == 0) {
+        if (gpio_get_level(PROVISION_BUTTON_GPIO) == 0) {
             ESP_LOGI(TAG, "Provision button pressed");
             esp_restart();
         }
@@ -197,17 +197,20 @@ bool pull_and_display_latest() {
 
 void enter_deepsleep(const char *reasoning)
 {
+    int sleep_time = CONFIG_SUCCESS_UPDATE_INTERVAL;
+
     if (strncmp(reasoning, "Error", 5) == 0) {
         error_screen();
+        sleep_time = CONFIG_FAILURE_UPDATE_INTERVAL;
         ESP_LOGE(TAG, "Deep sleeping for %d seconds... %s",
-                 CONFIG_UPDATE_INTERVAL, reasoning);
+                 sleep_time, reasoning);
     } else {
         ESP_LOGI(TAG, "Deep sleeping for %d seconds... %s",
-                 CONFIG_UPDATE_INTERVAL, reasoning);
+                 sleep_time, reasoning);
     }
 
     esp_sleep_enable_timer_wakeup(
-        (uint64_t)CONFIG_UPDATE_INTERVAL * 1000000ULL
+        (uint64_t)sleep_time * 1000000ULL
     );
 
     esp_sleep_enable_ext1_wakeup(
