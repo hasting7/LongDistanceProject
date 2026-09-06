@@ -15,6 +15,7 @@ typedef enum {
     WIFI_PENDING,
     WIFI_CONNECTED,
     WIFI_FAILED,
+    WIFI_INVALID
 } wifi_state_enum;
 
 extern volatile wifi_state_enum wifi_state;

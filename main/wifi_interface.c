@@ -51,14 +51,20 @@ static void event_handler(
     } else if (event_base == WIFI_EVENT &&
                event_id == WIFI_EVENT_STA_DISCONNECTED) {
 
+
         wifi_event_sta_disconnected_t *event =
             (wifi_event_sta_disconnected_t *)event_data;
 
-        ESP_LOGW(
-            TAG,
-            "WiFi disconnected! reason=%d",
-            event->reason
-        );
+        if (event->reason == WIFI_REASON_AUTH_FAIL) {
+            wifi_state = WIFI_INVALID;
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+
+        } else if (event->reason == WIFI_REASON_NO_AP_FOUND) {
+            wifi_state = WIFI_INVALID;
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        } else {
+            ESP_LOGW(TAG,"WiFi disconnected! reason=%d",event->reason);
+        }
 
         if (s_retry_num < CONFIG_WIFI_MAXIMUM_RETRY) {
 
@@ -264,6 +270,10 @@ bool wifi_join(const char *ssid, const char *password)
         return true;
     }
 
+    if (wifi_state != WIFI_INVALID) {
+        wifi_state = WIFI_FAILED;
+    }
+
     if (bits & WIFI_FAIL_BIT) {
 
         ESP_LOGE(
@@ -272,14 +282,10 @@ bool wifi_join(const char *ssid, const char *password)
             ssid
         );
 
-        wifi_state = WIFI_FAILED;
-
         return false;
     }
 
     ESP_LOGE(TAG, "Unexpected WiFi event");
-
-    wifi_state = WIFI_FAILED;
 
     return false;
 }

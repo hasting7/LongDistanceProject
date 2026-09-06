@@ -335,6 +335,10 @@ void app_main(void)
 
     if (!wifi_join(wifi.ssid, wifi.pwd)) {
         ESP_LOGE(TAG,"Failed to connect to WiFi");
+        if (wifi_state == WIFI_INVALID) {
+            ESP_LOGE(TAG,"Stored Wifi no longer avaliable");
+            esp_restart(); // force a reboot
+        }
         enter_deepsleep("Error: Failed to connect to Wifi");
     }
 
