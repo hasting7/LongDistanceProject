@@ -242,12 +242,12 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "%s running Firmware version: %s", CONFIG_DEVICE_NAME, CONFIG_DEVICE_VERSION);
     
+    gpio_set_direction(PROVISION_BUTTON_GPIO, GPIO_MODE_INPUT);
+    gpio_pullup_en(PROVISION_BUTTON_GPIO);
+
     xTaskCreate( provision_button_task,"provision_button",2048,NULL,5,NULL);
     disk_init();
     eink_init();
-
-    gpio_set_direction(PROVISION_BUTTON_GPIO, GPIO_MODE_INPUT);
-    gpio_pullup_en(PROVISION_BUTTON_GPIO);
 
     esp_reset_reason_t reason = esp_reset_reason();
     esp_sleep_wakeup_cause_t wakeup = esp_sleep_get_wakeup_causes();
