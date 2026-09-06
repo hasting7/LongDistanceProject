@@ -72,8 +72,13 @@ void api_get(ScreenData *screen, const char *path) {
     net_run_tls_task(api_get_job, &job);
 }
 
+typedef struct {
+    uint8_t id;
+    bool got_data;
+} id_result_t;
+
 static esp_err_t id_event_handler(esp_http_client_event_t *evt) {
-    uint8_t *id = evt->user_data;
+    id_result_t *result = evt->user_data;
 
     if (evt->event_id == HTTP_EVENT_ON_DATA && evt->data_len > 0) {
         char buffer[4] = {0};
@@ -83,15 +88,16 @@ static esp_err_t id_event_handler(esp_http_client_event_t *evt) {
 
         int value = atoi(buffer);
         if (value >= 0 && value <= 255) {
-            *id = (uint8_t)value;
+            result->id = (uint8_t)value;
+            result->got_data = true;
         }
     }
 
     return ESP_OK;
 }
 
-uint8_t cloud_check_id(const char *endpoint) {
-    uint8_t id = 0;
+bool cloud_check_id(const char *endpoint, uint8_t *out_id) {
+    id_result_t result = { .id = 0, .got_data = false };
     char url[256];
 
     snprintf(
@@ -111,7 +117,7 @@ uint8_t cloud_check_id(const char *endpoint) {
         .event_handler = id_event_handler,
         .crt_bundle_attach = esp_crt_bundle_attach,
         .timeout_ms = 3000,
-        .user_data = &id
+        .user_data = &result
     };
 
     esp_http_client_handle_t client =
@@ -119,20 +125,22 @@ uint8_t cloud_check_id(const char *endpoint) {
 
     if (client == NULL) {
         ESP_LOGE(TAG, "Failed to initialize HTTP client");
-        return 0;
+        return false;
     }
 
     esp_err_t err = esp_http_client_perform(client);
+    int status = esp_http_client_get_status_code(client);
 
-    if (err != ESP_OK ||
-        esp_http_client_get_status_code(client) != 200) {
-        ESP_LOGE(TAG, "Failed to fetch screen ID: %s", esp_err_to_name(err));
-        id = 0;
+    bool ok = (err == ESP_OK) && (status == 200) && result.got_data;
+
+    if (!ok) {
+        ESP_LOGE(TAG, "Failed to fetch screen ID: %s (status = %d)", esp_err_to_name(err), status);
     } else {
-        ESP_LOGI(TAG, "Screen ID = %u", id);
+        ESP_LOGI(TAG, "Screen ID = %u", result.id);
+        *out_id = result.id;
     }
 
     esp_http_client_cleanup(client);
 
-    return id;
+    return ok;
 }

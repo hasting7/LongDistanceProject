@@ -80,9 +80,14 @@ static void provision_button_task(void *pv)
 
 
 void store_screen_to_nvm(const char *endpoint, const char *name) {
-    // look at existing id, if exists 
+    // look at existing id, if exists
     uint8_t current_stored_id = get_screen_id(name);
-    uint8_t new_id = cloud_check_id(endpoint);
+    uint8_t new_id;
+
+    if (!cloud_check_id(endpoint, &new_id)) {
+        ESP_LOGE(TAG, "Failed to check cloud id for \"%s\", skipping update", name);
+        return;
+    }
 
     if (current_stored_id == new_id) {
         ESP_LOGI(TAG,"Stored Screen '%s' (id = %d) is up to date, skipping download.", name, new_id);
@@ -169,7 +174,12 @@ bool pull_and_display_latest() {
     char endpoint[64];
     snprintf(endpoint, sizeof(endpoint), "/main/%s", TIMEZONE_NAME);
 
-    uint8_t new_id = cloud_check_id(endpoint);
+    uint8_t new_id;
+    if (!cloud_check_id(endpoint, &new_id)) {
+        ESP_LOGE(TAG, "Failed to check cloud id for %s", endpoint);
+        return false;
+    }
+
     uint8_t current_id = get_screen_id(CURRENT_SCREEN);
     ESP_LOGI(TAG, "Currently displaying screen id %d", current_id);
 
@@ -185,9 +195,16 @@ bool pull_and_display_latest() {
     api_get(screen, endpoint);
 
     uint8_t *bitmap = serve_bitmap(screen, 5000);
+
+    if (!bitmap) {
+        ESP_LOGE(TAG, "Failed to build bitmap for %s, not updating display", endpoint);
+    }
+
     bool ok = bitmap ? display_screen(bitmap) : false;
 
-    set_screen_id(CURRENT_SCREEN, new_id);
+    if (ok) {
+        set_screen_id(CURRENT_SCREEN, new_id);
+    }
 
     delete_screen_data_instance(screen);
 
@@ -354,11 +371,15 @@ void app_main(void)
     clear_segment(SCREEN_ID_TYPE);
 #endif
 
-    pull_and_display_latest();
+    bool updated_ok = pull_and_display_latest();
 
     store_screen_to_nvm("/system/boot", "boot");
     store_screen_to_nvm("/system/error", "error");
     store_screen_to_nvm("/system/qr", "qr");
 
-    enter_deepsleep("Update Complete");
+    if (!updated_ok) {
+        enter_deepsleep("Error: Failed to update display");
+    } else {
+        enter_deepsleep("Update Complete");
+    }
 }

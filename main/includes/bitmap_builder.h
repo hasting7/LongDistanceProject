@@ -9,7 +9,8 @@ typedef struct screen_data_t ScreenData;
 typedef enum {
 	NOT_STARTED,
 	IN_PROGRESS,
-	COMPLETE
+	COMPLETE,
+	REJECTED
 } ScreenStatus;
 
 extern const int EINK_BUFFER_SIZE;

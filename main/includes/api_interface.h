@@ -12,6 +12,6 @@
 
 
 void api_get(ScreenData *screen, const char *url);
-uint8_t cloud_check_id(const char *endpoint);
+bool cloud_check_id(const char *endpoint, uint8_t *out_id);
 
 #endif

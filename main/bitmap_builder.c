@@ -124,6 +124,14 @@ static int reset_bitmap_buffer(ScreenData *screen, const char *packet_buffer) {
 	ESP_LOGI(TAG, "total bitmap size: %d, image width: %d, image height: %d",
 	         screen->total_bitmap_size, screen->image_width, screen->image_height);
 
+	if (screen->image_width != EINK_WIDTH || screen->image_height != EINK_HEIGHT) {
+		ESP_LOGE(TAG, "Rejecting bitmap: got %dx%d, expected %dx%d",
+		         screen->image_width, screen->image_height, EINK_WIDTH, EINK_HEIGHT);
+		screen->status = REJECTED;
+		xSemaphoreGive(screen->ready_sem);
+		return -1;
+	}
+
 	return header_offset_size;
 }
 
@@ -133,7 +141,7 @@ uint8_t* serve_bitmap(ScreenData *screen, uint32_t timeout_ms) {
         return NULL;
     }
     if (screen->status != COMPLETE) {
-        ESP_LOGW(TAG, "NOT COMPLETE");
+        ESP_LOGW(TAG, "Bitmap not usable, status=%d", screen->status);
         return NULL;
     }
     return screen->bitmap_buffer;
@@ -143,6 +151,12 @@ void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t b
 	int consumed_buffer = 0;
 	int bytes_to_read;
 
+	if (screen->status == REJECTED) {
+		// already rejected this screen (bad dimensions / oversized payload);
+		// ignore whatever is left of the response body.
+		return;
+	}
+
 	if (packet_buffer[0] == 'B' && packet_buffer[1] == 'M') {
 		if (screen->status != NOT_STARTED) {
 			// why are we getting another packet start if we are in progress
@@ -150,6 +164,9 @@ void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t b
 		}
 		// new image
 		consumed_buffer = reset_bitmap_buffer(screen, packet_buffer);
+		if (consumed_buffer < 0) {
+			return;
+		}
 	}
 	// read into buffer
 	ESP_LOGI(TAG, "Buffer size in: %d, copying %d bytes to buffer.", buffer_size, buffer_size - consumed_buffer);
@@ -160,8 +177,18 @@ void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t b
 			screen->skipping--;
 			continue;
 		}
+
+		int remaining_space = EINK_BUFFER_SIZE - screen->consumed_buffer;
+		if (remaining_space <= 0) {
+			ESP_LOGE(TAG, "Bitmap payload exceeds expected buffer size (%d bytes), rejecting", EINK_BUFFER_SIZE);
+			screen->status = REJECTED;
+			xSemaphoreGive(screen->ready_sem);
+			return;
+		}
+
 		// get bytes to read
 		bytes_to_read = MIN(EINK_WIDTH_BYTES - screen->row_consumed, buffer_size - consumed_buffer);
+		bytes_to_read = MIN(bytes_to_read, remaining_space);
 
 		// read the bytes
 		memcpy(screen->bitmap_buffer + screen->consumed_buffer, packet_buffer + consumed_buffer, bytes_to_read);
