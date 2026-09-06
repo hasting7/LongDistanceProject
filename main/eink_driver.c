@@ -191,8 +191,9 @@ bool display_screen(uint8_t *frame_ptr) {
 #endif
     ESP_LOGI(TAG, "Got framebuf, waking display");
 
-    if (!epd_wake_and_configure()) {
-        return false;
+    bool ok = epd_wake_and_configure();
+    if (!ok) {
+        goto sleep_and_return;
     }
     ESP_LOGI(TAG, "Display configured, writing RAM");
 
@@ -203,12 +204,18 @@ bool display_screen(uint8_t *frame_ptr) {
     epd_send_cmd(0x22);
     epd_send_data_byte(0xF7);
     epd_send_cmd(0x20);
-    if (!epd_wait_busy()) {
+    ok = epd_wait_busy();
+    if (!ok) {
         ESP_LOGE(TAG, "Timed out waiting busy after Master Activation (0x20)");
-        return false;
+        goto sleep_and_return;
     }
     ESP_LOGI(TAG, "Update complete, sleeping");
 
+sleep_and_return:
+    // Always try to park the panel in deep sleep before returning, success
+    // or failure -- the MCU is about to deep-sleep itself right after this
+    // and won't be around to manage the panel's charge pump if we leave it
+    // mid-sequence.
     epd_deep_sleep();
-    return true;
+    return ok;
 }
