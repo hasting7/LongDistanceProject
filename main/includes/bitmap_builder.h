@@ -4,6 +4,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
+#include "board.h"
+
 typedef struct screen_data_t ScreenData;
 
 typedef enum {
@@ -13,7 +15,6 @@ typedef enum {
 	REJECTED
 } ScreenStatus;
 
-extern const int EINK_BUFFER_SIZE;
 ScreenData *create_screen_data_instance(uint8_t *existing_buffer);
 ScreenData *create_screen_data_instance_from_mem(uint8_t *bitmap_buffer, size_t size);
 void delete_screen_data_instance(ScreenData *ptr);

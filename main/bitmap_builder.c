@@ -6,15 +6,9 @@
 #include "esp_system.h"
 #include "bitmap_builder.h"
 
-#define EINK_WIDTH			(128)
-#define EINK_HEIGHT 		(296)
-#define EINK_WIDTH_BYTES 	(EINK_WIDTH / 8)
-
-const int EINK_BUFFER_SIZE = (EINK_WIDTH_BYTES * EINK_HEIGHT);
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
 static const char *TAG = "BitMap Builder";
-static int width_padding_bytes = 0;
 
 
 typedef struct screen_data_t{
@@ -87,12 +81,6 @@ static int reset_bitmap_buffer(ScreenData *screen, const char *packet_buffer) {
 	screen->image_height = 0;
 	screen->skipping = 0;
 	screen->status = IN_PROGRESS;
-
-	// MOVE THIS
-	while ((width_padding_bytes + EINK_WIDTH_BYTES) % 4 != 0) {
-		width_padding_bytes += 1;
-	}
-	ESP_LOGI(TAG, "Padding bytes: %d", width_padding_bytes);
 
 	// read though header
 
@@ -198,7 +186,7 @@ void consume_http_packet(ScreenData *screen, const char *packet_buffer, size_t b
 
 		if (EINK_WIDTH_BYTES == screen->row_consumed) {
 			screen->row_consumed = 0;
-			screen->skipping += width_padding_bytes;
+			screen->skipping += EINK_ROW_PADDING;
 		}
 
 	}
