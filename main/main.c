@@ -330,8 +330,6 @@ void app_main(void)
         qr_screen();
 
         if (!provisioning_start()) {
-            ESP_LOGE(TAG,"Failed to start provisioning");
-
             wifi_state = WIFI_FAILED;
             enter_deepsleep("Error: failed to provision wifi");
         }
@@ -342,8 +340,6 @@ void app_main(void)
         boot_screen();
 
         if (!have_wifi) {
-            ESP_LOGE(TAG,"Provisioning finished but no WiFi credentials were stored");
-
             wifi_state = WIFI_FAILED;
             enter_deepsleep("Error: provisioned wifi credentials were lost");
         }
@@ -353,7 +349,6 @@ void app_main(void)
     ESP_LOGI(TAG, "Attempting WiFi connection to \"%s\"", wifi.ssid);
 
     if (!wifi_join(wifi.ssid, wifi.pwd)) {
-        ESP_LOGE(TAG,"Failed to connect to WiFi");
         if (wifi_state == WIFI_INVALID) {
             ESP_LOGE(TAG,"Stored Wifi no longer avaliable");
             esp_restart(); // force a reboot
@@ -362,7 +357,6 @@ void app_main(void)
     }
 
     if (!net_setup_wait_ready()) {
-        ESP_LOGW(TAG,"Network never became ready, refusing to make requests");
         enter_deepsleep("Error: Network never became ready, refusing to make requests");
     }
 
