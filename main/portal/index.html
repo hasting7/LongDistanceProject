@@ -10,6 +10,7 @@
   <main>
     <h1>Set up your tracker</h1>
     <p class="sub">Enter the details of the WiFi network you want the device to join.</p>
+
     <form method="POST" action="/connect">
       <label for="ssid">Network name</label>
       <input id="ssid" name="ssid" type="text" maxlength="32" required
@@ -29,8 +30,13 @@
         <button type="button" class="show-btn" data-target="pwd_confirm">Show</button>
       </div>
 
+      <p id="password-error" style="color: red; display: none;">
+        Passwords do not match.
+      </p>
+
       <button type="submit" class="submit-btn">Save &amp; connect</button>
     </form>
+
     <p class="note">The tracker will connect to your network after saving.</p>
   </main>
 
@@ -42,6 +48,19 @@
         input.type = showing ? "password" : "text";
         btn.textContent = showing ? "Show" : "Hide";
       });
+    });
+
+    document.querySelector("form").addEventListener("submit", function (e) {
+      var pwd = document.getElementById("pwd").value;
+      var confirm = document.getElementById("pwd_confirm").value;
+      var error = document.getElementById("password-error");
+
+      if (pwd !== confirm) {
+        e.preventDefault();
+        error.style.display = "block";
+      } else {
+        error.style.display = "none";
+      }
     });
   </script>
 </body>
