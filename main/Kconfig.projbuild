@@ -108,6 +108,10 @@ menu "Long Distance Tracker"
 
     menu "Device Settings"
 
+        config DEVICE_VERSION
+            string "Firmware version"
+            default "1.0.0"
+
         config DEVICE_NAME
             string "Device name"
             default "LongDistanceTracker"

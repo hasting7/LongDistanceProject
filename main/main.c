@@ -223,6 +223,8 @@ void enter_deepsleep(const char *reasoning)
 
 void app_main(void)
 {
+    ESP_LOGI(TAG, "%s running Firmware version: %s", CONFIG_DEVICE_NAME, CONFIG_DEVICE_VERSION);
+    
     xTaskCreate( provision_button_task,"provision_button",2048,NULL,5,NULL);
     disk_init();
     eink_init();
